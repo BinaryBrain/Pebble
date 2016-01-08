@@ -1,8 +1,10 @@
 #include <pebble.h>
 
 static Window *main_window;
+Layer *window_layer;
 TextLayer *top_layer;
 TextLayer *bot_layer;
+SimpleMenuLayer *menu_layer;
 
 #define false 0
 #define true 1
@@ -59,6 +61,14 @@ TextLayer *bot_layer;
 #define GRAVITY             10000 // (1g)² = 10000
 #define ACCEL_THRESHOLD     8000  // (1g)² = 10000
 #define NUMBER_OF_SCREENS   4
+
+#define NUMBER_OF_SECTIONS        5
+#define NUMBER_OF_LOCATION_ITEMS  5
+#define NUMBER_OF_WEATHER_ITEMS   7
+#define NUMBER_OF_TRANSPORT_ITEMS 1
+#define NUMBER_OF_TIME_ITEMS      2
+#define NUMBER_OF_BATTERY_ITEMS   1
+
 
 int counter = -1;
 char text[MAX_TEXT_SIZE];
@@ -144,6 +154,125 @@ void clearHighlight() {
   text_layer_set_text_color(bot_layer, GColorBlack);
 }
 
+/* SCREEN EDIT */
+static void menu_select_callback(int index, void *ctx) {
+  // TODO
+}
+
+SimpleMenuSection menuSections[NUMBER_OF_SECTIONS];
+// Sections
+SimpleMenuItem locationItems[NUMBER_OF_LOCATION_ITEMS];
+SimpleMenuItem weatherItems[NUMBER_OF_WEATHER_ITEMS];
+SimpleMenuItem transportItems[NUMBER_OF_TRANSPORT_ITEMS];
+SimpleMenuItem timeItems[NUMBER_OF_TIME_ITEMS];
+SimpleMenuItem batteryItems[NUMBER_OF_BATTERY_ITEMS];
+void initMenu() {
+  menuSections[0] = (SimpleMenuSection) {
+    .title = "Location",
+    .num_items = NUMBER_OF_LOCATION_ITEMS,
+    .items = locationItems,
+  };
+  menuSections[1] = (SimpleMenuSection) {
+    .title = "Weather",
+    .num_items = NUMBER_OF_WEATHER_ITEMS,
+    .items = weatherItems,
+  };
+  menuSections[2] = (SimpleMenuSection) {
+    .title = "Transport",
+    .num_items = NUMBER_OF_TRANSPORT_ITEMS,
+    .items = transportItems,
+  };
+  menuSections[3] = (SimpleMenuSection) {
+    .title = "Time",
+    .num_items = NUMBER_OF_TIME_ITEMS,
+    .items = timeItems,
+  };
+  menuSections[4] = (SimpleMenuSection) {
+    .title = "Battery",
+    .num_items = NUMBER_OF_BATTERY_ITEMS,
+    .items = batteryItems,
+  };
+  
+  // Items
+  locationItems[0] = (SimpleMenuItem) {
+    .title = "Location",
+    .callback = menu_select_callback,
+  };
+  locationItems[1] = (SimpleMenuItem) {
+    .title = "Fixing Target",
+    .callback = menu_select_callback,
+  };
+  locationItems[2] = (SimpleMenuItem) {
+    .title = "Start Thread Navigation",
+    .callback = menu_select_callback,
+  };
+  locationItems[3] = (SimpleMenuItem) {
+    .title = "Stop Thread Navigationt",
+    .callback = menu_select_callback,
+  };
+  locationItems[4] = (SimpleMenuItem) {
+    .title = "Elevation",
+    .callback = menu_select_callback,
+  };
+  
+  weatherItems[0] = (SimpleMenuItem) {
+    .title = "Weather Status",
+    .callback = menu_select_callback,
+  };
+  weatherItems[1] = (SimpleMenuItem) {
+    .title = "Temparature",
+    .callback = menu_select_callback,
+  };
+  weatherItems[2] = (SimpleMenuItem) {
+    .title = "Pressure",
+    .callback = menu_select_callback,
+  };
+  weatherItems[3] = (SimpleMenuItem) {
+    .title = "Humidity",
+    .callback = menu_select_callback,
+  };
+  weatherItems[4] = (SimpleMenuItem) {
+    .title = "Wind",
+    .callback = menu_select_callback,
+  };
+  weatherItems[5] = (SimpleMenuItem) {
+    .title = "Sunrise",
+    .callback = menu_select_callback,
+  };
+  weatherItems[6] = (SimpleMenuItem) {
+    .title = "Sunset",
+    .callback = menu_select_callback,
+  };
+  
+  transportItems[0] = (SimpleMenuItem) {
+    .title = "Transport",
+    .callback = menu_select_callback,
+  };
+  
+  timeItems[0] = (SimpleMenuItem) {
+    .title = "Uptime",
+    .callback = menu_select_callback,
+  };
+  timeItems[1] = (SimpleMenuItem) {
+    .title = "Active Time",
+    .callback = menu_select_callback,
+  };
+  
+  batteryItems[0] = (SimpleMenuItem) {
+    .title = "Battery Status",
+    .callback = menu_select_callback,
+  };
+}
+
+// Use
+void showMenu() {
+  layer_add_child(window_layer, simple_menu_layer_get_layer(menu_layer));
+}
+
+void hideMenu() {
+  layer_remove_from_parent(simple_menu_layer_get_layer(menu_layer));
+}
+
 void send(int key, char *value) {
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
@@ -169,7 +298,7 @@ void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     }
     else {
       snprintf(text, MAX_TEXT_SIZE, "Battery is\n%d%% charged", charge_state.charge_percent);
-    }
+	}
     // TODO text_layer_set_text(output_layer, text);
   }  
   
@@ -347,11 +476,16 @@ void click_config_provider(void *context) {
 }
 
 static void main_window_load(Window *window) {
-  Layer *window_layer = window_get_root_layer(window);
+  window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
+  
+  int height = bounds.size.h / 2;
 
-  top_layer = text_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h/2)); // Change if you use PEBBLE_SDK 3
-  bot_layer = text_layer_create(GRect(0, bounds.size.h/2, bounds.size.w, bounds.size.h/2)); // Change if you use PEBBLE_SDK 3
+  top_layer = text_layer_create(GRect(0, 0, bounds.size.w, height));
+  bot_layer = text_layer_create(GRect(0, bounds.size.h/2, bounds.size.w, height));
+  
+  initMenu();
+  menu_layer = simple_menu_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h), window, menuSections, NUMBER_OF_SECTIONS, NULL);
   
   text_layer_set_text(top_layer, "W00T!\nWoooot!");
   text_layer_set_text(bot_layer, "Please UP click !\nPlease...");
@@ -412,6 +546,19 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   }
 }
 
+void down_click_handler(ClickRecognizerRef recognizer, void *context) {
+  switch (state) {
+    case SCREEN_NAV:
+      changeScreenDown();
+      break;
+    case SCREEN_HIGHLIGHT:
+      highlight();
+      break;
+    case SCREEN_EDIT:
+      break;
+  }
+}
+
 void mid_click_handler(ClickRecognizerRef recognizer, void *context) {
   switch (state) {
     case SCREEN_NAV:
@@ -420,19 +567,7 @@ void mid_click_handler(ClickRecognizerRef recognizer, void *context) {
       break;
     case SCREEN_HIGHLIGHT:
       state = SCREEN_EDIT;
-      break;
-    case SCREEN_EDIT:
-      break;
-  }
-}
-
-void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  switch (state) {
-    case SCREEN_NAV:
-      changeScreenDown();
-      break;
-    case SCREEN_HIGHLIGHT:
-      highlight();
+      showMenu();
       break;
     case SCREEN_EDIT:
       break;
@@ -451,6 +586,7 @@ void back_click_handler(ClickRecognizerRef recognizer, void *context) {
       break;
     case SCREEN_EDIT:
       state = SCREEN_HIGHLIGHT;
+      hideMenu();
       break;
   }
 }
