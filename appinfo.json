@@ -1,0 +1,19 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "sacha.bron@copperflake.com",
+    "longName": "IHM",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "sdkVersion": "3",
+    "shortName": "IHM",
+    "uuid": "12448017-142a-422d-82f7-c91c0d865b1a",
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": false
+    }
+}
