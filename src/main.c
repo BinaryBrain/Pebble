@@ -1,7 +1,11 @@
 #include <pebble.h>
 
 static Window *main_window;
-TextLayer *output_layer;
+TextLayer *top_layer;
+TextLayer *bot_layer;
+
+#define false 0
+#define true 1
 
 // Android Communication
 #define REQUEST_LOCATION                0
@@ -54,12 +58,91 @@ TextLayer *output_layer;
 #define NUM_ACCEL_SAMPLES   10
 #define GRAVITY             10000 // (1g)² = 10000
 #define ACCEL_THRESHOLD     8000  // (1g)² = 10000
+#define NUMBER_OF_SCREENS   4
 
 int counter = -1;
 char text[MAX_TEXT_SIZE];
 unsigned long int up_time = 0;      //in seconds
 unsigned long int active_time = 0;  //in seconds/10
 
+typedef enum { SCREEN_NAV, SCREEN_HIGHLIGHT, SCREEN_EDIT } state_type;
+state_type state = SCREEN_NAV;
+
+typedef struct ScreenPart {
+  int type;
+  char* text;
+} ScreenPart;
+
+typedef struct Screen {
+  ScreenPart topPart;
+  ScreenPart botPart;
+} Screen;
+
+Screen screens[NUMBER_OF_SCREENS];
+int currentScreen = 0;
+
+
+void up_click_handler(ClickRecognizerRef recognizer, void *context);
+void mid_click_handler(ClickRecognizerRef recognizer, void *context);
+void down_click_handler(ClickRecognizerRef recognizer, void *context);
+void back_click_handler(ClickRecognizerRef recognizer, void *context);
+void highlight();
+void clearHighlight();
+
+/*
+void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
+  screen.topPart = top;
+  screen.botPart = bot;
+}
+*/
+
+/* SCREEN NAV */
+
+void printScreen() {
+  text_layer_set_text(top_layer, screens[currentScreen].topPart.text);
+  text_layer_set_text(bot_layer, screens[currentScreen].botPart.text);
+}
+
+void changeScreenUp() {
+  currentScreen += 1;
+  if (currentScreen >= NUMBER_OF_SCREENS) {
+    currentScreen = 0;
+  }
+
+  printScreen();
+}
+
+void changeScreenDown() {
+  currentScreen -= 1;
+  if (currentScreen < 0) {
+    currentScreen = NUMBER_OF_SCREENS;
+  }
+
+  printScreen();
+}
+
+/* SCREEN HIGHLIGHT */
+bool topHighlighted = true;
+void highlight() {
+  clearHighlight();
+  
+  if(topHighlighted) {
+    text_layer_set_background_color(top_layer, GColorBlack);
+    text_layer_set_text_color(top_layer, GColorWhite);
+    topHighlighted = false;
+  } else {
+    text_layer_set_background_color(bot_layer, GColorBlack);
+    text_layer_set_text_color(bot_layer, GColorWhite);
+    topHighlighted = true;
+  }
+}
+
+void clearHighlight() {
+  text_layer_set_background_color(top_layer, GColorWhite);
+  text_layer_set_text_color(top_layer, GColorBlack);
+  text_layer_set_background_color(bot_layer, GColorWhite);
+  text_layer_set_text_color(bot_layer, GColorBlack);
+}
 
 void send(int key, char *value) {
   DictionaryIterator *iter;
@@ -76,7 +159,7 @@ void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     int hours = up_time / 3600;
 
     snprintf(text, MAX_TEXT_SIZE, "Uptime:\n%dh %dm %ds", hours, minutes, seconds);
-    text_layer_set_text(output_layer, text);
+    // TODO text_layer_set_text(output_layer, text);
   }
   else if (counter == SHOW_BATTERY_STATE) {
     BatteryChargeState charge_state = battery_state_service_peek();
@@ -87,7 +170,7 @@ void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     else {
       snprintf(text, MAX_TEXT_SIZE, "Battery is\n%d%% charged", charge_state.charge_percent);
     }
-    text_layer_set_text(output_layer, text);
+    // TODO text_layer_set_text(output_layer, text);
   }  
   
   // Increment uptime
@@ -116,7 +199,7 @@ static void data_handler(AccelData *data, uint32_t num_samples) {  // accel from
     int hours = active_time_s / 3600;
 
     snprintf(text, MAX_TEXT_SIZE, "Active time:\n%dh %dm %ds", hours, minutes, seconds);
-    text_layer_set_text(output_layer, text);
+    // TODO text_layer_set_text(output_layer, text);
   }
 }
 
@@ -188,9 +271,10 @@ void received_handler(DictionaryIterator *iter, void *context) {
       strcpy(text, "Error.\nPlease check your dictionary KEYS");
       break;
   }
-  text_layer_set_text(output_layer, text);
+  // TODO text_layer_set_text(output_layer, text);
 }
 
+/*
 void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   counter = (counter + 1) % NUMBER_OF_ITEMS;
   APP_LOG(APP_LOG_LEVEL_INFO, "Sending request id : %d", counter);
@@ -251,25 +335,34 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context) {
       strcpy(text, "Error.\nPlease check if NUMBER_OF_ITEMS is OK");
       break;
   }
-  text_layer_set_text(output_layer, text);
+  // TODO text_layer_set_text(output_layer, text);
 }
+*/
 
 void click_config_provider(void *context) {
 	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+	window_single_click_subscribe(BUTTON_ID_SELECT, mid_click_handler);
+	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+	window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
 }
 
 static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  output_layer = text_layer_create(GRect(0, 60, bounds.size.w, bounds.size.h)); // Change if you use PEBBLE_SDK 3
-  text_layer_set_text(output_layer, "W00T!\nPlease UP click !");
-  text_layer_set_text_alignment(output_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(output_layer));
+  top_layer = text_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h/2)); // Change if you use PEBBLE_SDK 3
+  bot_layer = text_layer_create(GRect(0, bounds.size.h/2, bounds.size.w, bounds.size.h/2)); // Change if you use PEBBLE_SDK 3
+  
+  text_layer_set_text(top_layer, "W00T!\nWoooot!");
+  text_layer_set_text(bot_layer, "Please UP click !\nPlease...");
+  
+  layer_add_child(window_layer, text_layer_get_layer(top_layer));
+  layer_add_child(window_layer, text_layer_get_layer(bot_layer));
 }
 
 static void main_window_unload(Window *window) {
-  text_layer_destroy(output_layer);
+  text_layer_destroy(top_layer);
+  text_layer_destroy(bot_layer);
 }
 
 /**
@@ -294,10 +387,72 @@ static void init(void) {
 
   app_message_register_inbox_received(received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
-}
   
+  ScreenPart top0 = { .text = "Hello", .type = 0 };
+  ScreenPart bot0 = { .text = "World", .type = 0 };
+  screens[0].topPart = top0;
+  screens[0].botPart = bot0;
+}
+
 static void deinit(void) {
   window_destroy(main_window);
+}
+
+/* EVENTS */
+void up_click_handler(ClickRecognizerRef recognizer, void *context) {
+  switch (state) {
+    case SCREEN_NAV:
+      changeScreenUp();
+      break;
+    case SCREEN_HIGHLIGHT:
+      highlight();
+      break;
+    case SCREEN_EDIT:
+      break;
+  }
+}
+
+void mid_click_handler(ClickRecognizerRef recognizer, void *context) {
+  switch (state) {
+    case SCREEN_NAV:
+      state = SCREEN_HIGHLIGHT;
+      highlight();
+      break;
+    case SCREEN_HIGHLIGHT:
+      state = SCREEN_EDIT;
+      break;
+    case SCREEN_EDIT:
+      break;
+  }
+}
+
+void down_click_handler(ClickRecognizerRef recognizer, void *context) {
+  switch (state) {
+    case SCREEN_NAV:
+      changeScreenDown();
+      break;
+    case SCREEN_HIGHLIGHT:
+      highlight();
+      break;
+    case SCREEN_EDIT:
+      break;
+  }
+}
+
+void back_click_handler(ClickRecognizerRef recognizer, void *context) {
+  switch (state) {
+    case SCREEN_NAV:
+      // TODO quit?
+      break;
+    case SCREEN_HIGHLIGHT:
+      state = SCREEN_NAV;
+      clearHighlight();
+      topHighlighted = true;
+      break;
+    case SCREEN_EDIT:
+      state = SCREEN_HIGHLIGHT;
+      break;
+  }
 }
 
 /**
