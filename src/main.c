@@ -1,10 +1,10 @@
 #include <pebble.h>
 
-static Window *main_window;
-Layer *window_layer;
-TextLayer *top_layer;
-TextLayer *bot_layer;
-SimpleMenuLayer *menu_layer;
+static Window* screen_window;
+static Window* menu_window;
+TextLayer* top_layer;
+TextLayer* bot_layer;
+SimpleMenuLayer* menu_layer;
 
 #define false 0
 #define true 1
@@ -91,13 +91,15 @@ typedef struct Screen {
 Screen screens[NUMBER_OF_SCREENS];
 int currentScreen = 0;
 
-
 void up_click_handler(ClickRecognizerRef recognizer, void *context);
 void mid_click_handler(ClickRecognizerRef recognizer, void *context);
 void down_click_handler(ClickRecognizerRef recognizer, void *context);
 void back_click_handler(ClickRecognizerRef recognizer, void *context);
 void highlight();
 void clearHighlight();
+void initMenu();
+void showMenu();
+void hideMenu();
 
 /*
 void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
@@ -107,8 +109,26 @@ void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
 */
 
 /* SCREEN NAV */
+void initScreen() {
+  ScreenPart top0 = { .text = "Hello 0", .type = 0 };
+  ScreenPart bot0 = { .text = "World 0", .type = 0 };
+  screens[0].topPart = top0;
+  screens[0].botPart = bot0;
+  ScreenPart top1 = { .text = "Hello 1", .type = 0 };
+  ScreenPart bot1 = { .text = "World 1", .type = 0 };
+  screens[1].topPart = top1;
+  screens[1].botPart = bot1;
+  ScreenPart top2 = { .text = "Hello 2", .type = 0 };
+  ScreenPart bot2 = { .text = "World 2", .type = 0 };
+  screens[2].topPart = top2;
+  screens[2].botPart = bot2;
+  ScreenPart top3 = { .text = "Hello 3", .type = 0 };
+  ScreenPart bot3 = { .text = "World 3", .type = 0 };
+  screens[3].topPart = top3;
+  screens[3].botPart = bot3;
+}
 
-void printScreen() {
+void refreshScreen() {
   text_layer_set_text(top_layer, screens[currentScreen].topPart.text);
   text_layer_set_text(bot_layer, screens[currentScreen].botPart.text);
 }
@@ -119,16 +139,16 @@ void changeScreenUp() {
     currentScreen = 0;
   }
 
-  printScreen();
+  refreshScreen();
 }
 
 void changeScreenDown() {
   currentScreen -= 1;
   if (currentScreen < 0) {
-    currentScreen = NUMBER_OF_SCREENS;
+    currentScreen = NUMBER_OF_SCREENS-1;
   }
 
-  printScreen();
+  refreshScreen();
 }
 
 /* SCREEN HIGHLIGHT */
@@ -156,7 +176,22 @@ void clearHighlight() {
 
 /* SCREEN EDIT */
 static void menu_select_callback(int index, void *ctx) {
-  // TODO
+  if(topHighlighted) { // Reverted
+    screens[currentScreen].botPart.text = "Yey!";
+    screens[currentScreen].botPart.type = index;
+    layer_mark_dirty(text_layer_get_layer(bot_layer));
+  } else {
+    screens[currentScreen].topPart.text = "Woot!";
+    screens[currentScreen].topPart.type = index;
+    layer_mark_dirty(text_layer_get_layer(top_layer));
+  }
+  
+  refreshScreen();
+  
+  hideMenu();
+  state = SCREEN_NAV;
+  clearHighlight();
+  topHighlighted = true;
 }
 
 SimpleMenuSection menuSections[NUMBER_OF_SECTIONS];
@@ -166,6 +201,7 @@ SimpleMenuItem weatherItems[NUMBER_OF_WEATHER_ITEMS];
 SimpleMenuItem transportItems[NUMBER_OF_TRANSPORT_ITEMS];
 SimpleMenuItem timeItems[NUMBER_OF_TIME_ITEMS];
 SimpleMenuItem batteryItems[NUMBER_OF_BATTERY_ITEMS];
+
 void initMenu() {
   menuSections[0] = (SimpleMenuSection) {
     .title = "Location",
@@ -266,11 +302,11 @@ void initMenu() {
 
 // Use
 void showMenu() {
-  layer_add_child(window_layer, simple_menu_layer_get_layer(menu_layer));
+  window_stack_push(menu_window, true);
 }
 
 void hideMenu() {
-  layer_remove_from_parent(simple_menu_layer_get_layer(menu_layer));
+  window_stack_remove(menu_window, true);
 }
 
 void send(int key, char *value) {
@@ -475,42 +511,60 @@ void click_config_provider(void *context) {
 	window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
 }
 
-static void main_window_load(Window *window) {
-  window_layer = window_get_root_layer(window);
+static void screen_window_load(Window *window) {
+  Layer* window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
   
-  int height = bounds.size.h / 2;
-
-  top_layer = text_layer_create(GRect(0, 0, bounds.size.w, height));
-  bot_layer = text_layer_create(GRect(0, bounds.size.h/2, bounds.size.w, height));
-  
-  initMenu();
-  menu_layer = simple_menu_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h), window, menuSections, NUMBER_OF_SECTIONS, NULL);
-  
-  text_layer_set_text(top_layer, "W00T!\nWoooot!");
-  text_layer_set_text(bot_layer, "Please UP click !\nPlease...");
+  top_layer = text_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h/2));
+  bot_layer = text_layer_create(GRect(0, bounds.size.h/2, bounds.size.w, bounds.size.h/2));
   
   layer_add_child(window_layer, text_layer_get_layer(top_layer));
   layer_add_child(window_layer, text_layer_get_layer(bot_layer));
+    
+  initScreen();
+  refreshScreen();
 }
 
-static void main_window_unload(Window *window) {
+static void screen_window_unload(Window *window) {
   text_layer_destroy(top_layer);
   text_layer_destroy(bot_layer);
+}
+
+static void menu_window_load(Window *window) {
+  Layer* window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  menu_layer = simple_menu_layer_create(GRect(0, 0, bounds.size.w, bounds.size.h), window, menuSections, NUMBER_OF_SECTIONS, NULL);
+  layer_add_child(window_layer, simple_menu_layer_get_layer(menu_layer));
+  
+  initMenu();
+}
+
+static void menu_window_unload(Window *window) {
+  simple_menu_layer_destroy(menu_layer);
 }
 
 /**
  * Initializes
  */
 static void init(void) {
-  main_window = window_create();
-  window_set_click_config_provider(main_window, click_config_provider);
-  window_set_window_handlers(main_window, (WindowHandlers) {
-    .load = main_window_load,
-    .unload = main_window_unload,
+  // Screen Window
+  screen_window = window_create();
+  window_set_click_config_provider(screen_window, click_config_provider);
+  window_set_window_handlers(screen_window, (WindowHandlers) {
+    .load = screen_window_load,
+    .unload = screen_window_unload,
   });
-  window_stack_push(main_window, true);
-
+  window_stack_push(screen_window, true);
+  
+  // Menu Window
+  menu_window = window_create();
+  window_set_click_config_provider(menu_window, click_config_provider);
+  window_set_window_handlers(menu_window, (WindowHandlers) {
+    .load = menu_window_load,
+    .unload = menu_window_unload,
+  });
+  
   // Subscribe to TickTimerService
   tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
   
@@ -521,15 +575,11 @@ static void init(void) {
 
   app_message_register_inbox_received(received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
-  
-  ScreenPart top0 = { .text = "Hello", .type = 0 };
-  ScreenPart bot0 = { .text = "World", .type = 0 };
-  screens[0].topPart = top0;
-  screens[0].botPart = bot0;
 }
 
 static void deinit(void) {
-  window_destroy(main_window);
+  window_destroy(screen_window);
+  window_destroy(menu_window);
 }
 
 /* EVENTS */
