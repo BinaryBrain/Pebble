@@ -80,7 +80,7 @@ state_type state = SCREEN_NAV;
 
 typedef struct ScreenPart {
   int type;
-  char* text;
+  char text[500];
 } ScreenPart;
 
 typedef struct Screen {
@@ -100,6 +100,12 @@ void clearHighlight();
 void initMenu();
 void showMenu();
 void hideMenu();
+void menu_select_callback(int index, void *ctx);
+void click_config_provider(void *context);
+void click_config_provider_menu(void *context);
+void getSelectionText(int index, char* text);
+void send(int key, char *value);
+void updateScreen(const char* string, int index);
 
 /*
 void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
@@ -175,13 +181,32 @@ void clearHighlight() {
 }
 
 /* SCREEN EDIT */
-static void menu_select_callback(int index, void *ctx) {
+static void menu_select_callback_location(int index, void *ctx) {
+  menu_select_callback(index, ctx);
+}
+static void menu_select_callback_weather(int index, void *ctx) {
+  menu_select_callback(index + NUMBER_OF_LOCATION_ITEMS, ctx);
+}
+static void menu_select_callback_transport(int index, void *ctx) {
+  menu_select_callback(index + NUMBER_OF_LOCATION_ITEMS + NUMBER_OF_WEATHER_ITEMS, ctx);
+}
+static void menu_select_callback_time(int index, void *ctx) {
+  menu_select_callback(index + NUMBER_OF_LOCATION_ITEMS + NUMBER_OF_WEATHER_ITEMS + NUMBER_OF_TRANSPORT_ITEMS, ctx);
+}
+static void menu_select_callback_battery(int index, void *ctx) {
+  menu_select_callback(index + NUMBER_OF_LOCATION_ITEMS + NUMBER_OF_WEATHER_ITEMS + NUMBER_OF_TRANSPORT_ITEMS + NUMBER_OF_TIME_ITEMS, ctx);
+}
+
+void menu_select_callback(int index, void *ctx) {
+  char text[200] = "";
+  getSelectionText(index, text);
+  
   if(topHighlighted) { // Reverted
-    screens[currentScreen].botPart.text = "Yey!";
+    strcpy(screens[currentScreen].botPart.text, text);
     screens[currentScreen].botPart.type = index;
     layer_mark_dirty(text_layer_get_layer(bot_layer));
   } else {
-    screens[currentScreen].topPart.text = "Woot!";
+    strcpy(screens[currentScreen].topPart.text, text);
     screens[currentScreen].topPart.type = index;
     layer_mark_dirty(text_layer_get_layer(top_layer));
   }
@@ -192,6 +217,8 @@ static void menu_select_callback(int index, void *ctx) {
   state = SCREEN_NAV;
   clearHighlight();
   topHighlighted = true;
+  
+  send(index, "");
 }
 
 SimpleMenuSection menuSections[NUMBER_OF_SECTIONS];
@@ -232,77 +259,82 @@ void initMenu() {
   // Items
   locationItems[0] = (SimpleMenuItem) {
     .title = "Location",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_location,
   };
   locationItems[1] = (SimpleMenuItem) {
     .title = "Fixing Target",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_location,
   };
   locationItems[2] = (SimpleMenuItem) {
     .title = "Start Thread Navigation",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_location,
   };
   locationItems[3] = (SimpleMenuItem) {
     .title = "Stop Thread Navigationt",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_location,
   };
   locationItems[4] = (SimpleMenuItem) {
     .title = "Elevation",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_location,
   };
   
   weatherItems[0] = (SimpleMenuItem) {
     .title = "Weather Status",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[1] = (SimpleMenuItem) {
     .title = "Temparature",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[2] = (SimpleMenuItem) {
     .title = "Pressure",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[3] = (SimpleMenuItem) {
     .title = "Humidity",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[4] = (SimpleMenuItem) {
     .title = "Wind",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[5] = (SimpleMenuItem) {
     .title = "Sunrise",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   weatherItems[6] = (SimpleMenuItem) {
     .title = "Sunset",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_weather,
   };
   
   transportItems[0] = (SimpleMenuItem) {
     .title = "Transport",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_transport,
   };
   
   timeItems[0] = (SimpleMenuItem) {
     .title = "Uptime",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_time,
   };
   timeItems[1] = (SimpleMenuItem) {
     .title = "Active Time",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_time,
   };
   
   batteryItems[0] = (SimpleMenuItem) {
     .title = "Battery Status",
-    .callback = menu_select_callback,
+    .callback = menu_select_callback_battery,
   };
 }
 
 // Use
 void showMenu() {
   window_stack_push(menu_window, true);
+  if (topHighlighted) {
+    simple_menu_layer_set_selected_index(menu_layer, screens[currentScreen].botPart.type, true);
+  } else {
+    simple_menu_layer_set_selected_index(menu_layer, screens[currentScreen].topPart.type, true);
+  }
 }
 
 void hideMenu() {
@@ -316,56 +348,67 @@ void send(int key, char *value) {
   app_message_outbox_send();
 }
 
-void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  if (counter ==  SHOW_UP_TIME) {
-    // Get time since launch
-    int seconds = up_time % 60;
-    int minutes = (up_time % 3600) / 60;
-    int hours = up_time / 3600;
-
-    snprintf(text, MAX_TEXT_SIZE, "Uptime:\n%dh %dm %ds", hours, minutes, seconds);
-    // TODO text_layer_set_text(output_layer, text);
-  }
-  else if (counter == SHOW_BATTERY_STATE) {
-    BatteryChargeState charge_state = battery_state_service_peek();
-
-    if (charge_state.is_charging) {
-      snprintf(text, MAX_TEXT_SIZE, "Battery is charging");
+void updateScreen(const char* string, int index) {
+  for (unsigned int i = 0; i < NUMBER_OF_SCREENS; i++) {
+    if (screens[i].topPart.type == index) {
+      strcpy(screens[i].topPart.text, string);
     }
-    else {
-      snprintf(text, MAX_TEXT_SIZE, "Battery is\n%d%% charged", charge_state.charge_percent);
-	}
-    // TODO text_layer_set_text(output_layer, text);
-  }  
+    if (screens[i].botPart.type == index) {
+      strcpy(screens[i].botPart.text, string);
+    }
+  }
+  
+  refreshScreen();
+}
+
+void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  // Get time since launch
+  int seconds = up_time % 60;
+  int minutes = (up_time % 3600) / 60;
+  int hours = up_time / 3600;
+
+  snprintf(text, MAX_TEXT_SIZE, "Uptime:\n%dh %dm %ds", hours, minutes, seconds);
+
+  updateScreen(text, SHOW_UP_TIME);
+  
+  // Battery
+  BatteryChargeState charge_state = battery_state_service_peek();
+
+  if (charge_state.is_charging) {
+    snprintf(text, MAX_TEXT_SIZE, "Battery is charging");
+  }
+  else {
+    snprintf(text, MAX_TEXT_SIZE, "Battery is\n%d%% charged", charge_state.charge_percent);
+  }
+  updateScreen(text, SHOW_BATTERY_STATE);
   
   // Increment uptime
   up_time++;
 }
 
 static void data_handler(AccelData *data, uint32_t num_samples) {  // accel from -4000 to 4000, 1g = 1000 cm/s²
-  if (counter == SHOW_ACTIVE_TIME) {
-    int i, x, y, z, acc_norm_2;
-    for (i = 0; i < NUM_ACCEL_SAMPLES; i++) {
-                                             // Divide by 10 to avoid too high values. Now from -400 to 400
-      x = data[i].x / 10;                    // accel in dm/s²
-      y = data[i].y / 10;                    // accel in dm/s²
-      z = data[i].z / 10;                    // accel in dm/s²
-                                             // 1g = 100 dm/s²  
-      acc_norm_2 = (x*x) + (y*y) + (z*z);    // (1g)² = 10000
-      //APP_LOG(APP_LOG_LEVEL_INFO, "%d %d %d %d", x, y, z, acc_norm_2);
-      if ( ((acc_norm_2 - GRAVITY) > ACCEL_THRESHOLD) || ((GRAVITY - acc_norm_2) > ACCEL_THRESHOLD) ) {
-        active_time++;
-      }
+  int i, x, y, z, acc_norm_2;
+  for (i = 0; i < NUM_ACCEL_SAMPLES; i++) {
+    // Divide by 10 to avoid too high values. Now from -400 to 400
+    x = data[i].x / 10;                    // accel in dm/s²
+    y = data[i].y / 10;                    // accel in dm/s²
+    z = data[i].z / 10;                    // accel in dm/s²
+    // 1g = 100 dm/s²  
+    acc_norm_2 = (x*x) + (y*y) + (z*z);    // (1g)² = 10000
+    //APP_LOG(APP_LOG_LEVEL_INFO, "%d %d %d %d", x, y, z, acc_norm_2);
+    if ( ((acc_norm_2 - GRAVITY) > ACCEL_THRESHOLD) || ((GRAVITY - acc_norm_2) > ACCEL_THRESHOLD) ) {
+      active_time++;
     }
-    
-    int active_time_s = active_time / 10;
-    int seconds = active_time_s % 60;
-    int minutes = (active_time_s % 3600) / 60;
-    int hours = active_time_s / 3600;
-
-    snprintf(text, MAX_TEXT_SIZE, "Active time:\n%dh %dm %ds", hours, minutes, seconds);
-    // TODO text_layer_set_text(output_layer, text);
   }
+
+  int active_time_s = active_time / 10;
+  int seconds = active_time_s % 60;
+  int minutes = (active_time_s % 3600) / 60;
+  int hours = active_time_s / 3600;
+
+  snprintf(text, MAX_TEXT_SIZE, "Active time:\n%dh %dm %ds", hours, minutes, seconds);
+
+  updateScreen(text, SHOW_ACTIVE_TIME);
 }
 
 void received_handler(DictionaryIterator *iter, void *context) {
@@ -436,18 +479,13 @@ void received_handler(DictionaryIterator *iter, void *context) {
       strcpy(text, "Error.\nPlease check your dictionary KEYS");
       break;
   }
-  // TODO text_layer_set_text(output_layer, text);
+  
+  updateScreen(text, result_tuple->value->int32);
 }
 
-/*
-void up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  counter = (counter + 1) % NUMBER_OF_ITEMS;
-  APP_LOG(APP_LOG_LEVEL_INFO, "Sending request id : %d", counter);
-  if (counter < 13) {
-	  send(counter, "");
-  }
 
-  switch (counter) {
+void getSelectionText(int index, char* text) {
+  switch (index) {
     case REQUEST_LOCATION:
       strcpy(text, "Request for:\nLOCATION\nsent");
       break;
@@ -500,15 +538,6 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context) {
       strcpy(text, "Error.\nPlease check if NUMBER_OF_ITEMS is OK");
       break;
   }
-  // TODO text_layer_set_text(output_layer, text);
-}
-*/
-
-void click_config_provider(void *context) {
-	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
-	window_single_click_subscribe(BUTTON_ID_SELECT, mid_click_handler);
-	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-	window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
 }
 
 static void screen_window_load(Window *window) {
@@ -520,7 +549,7 @@ static void screen_window_load(Window *window) {
   
   layer_add_child(window_layer, text_layer_get_layer(top_layer));
   layer_add_child(window_layer, text_layer_get_layer(bot_layer));
-    
+  
   initScreen();
   refreshScreen();
 }
@@ -559,11 +588,13 @@ static void init(void) {
   
   // Menu Window
   menu_window = window_create();
-  window_set_click_config_provider(menu_window, click_config_provider);
   window_set_window_handlers(menu_window, (WindowHandlers) {
     .load = menu_window_load,
     .unload = menu_window_unload,
   });
+  
+  window_set_click_config_provider(menu_window, click_config_provider_menu);
+  // menu_layer_set_click_config_onto_window(simple_menu_layer_get_menu_layer(menu_layer), menu_window);
   
   // Subscribe to TickTimerService
   tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
@@ -583,6 +614,23 @@ static void deinit(void) {
 }
 
 /* EVENTS */
+void click_config_provider(void *context) {
+	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+	window_single_click_subscribe(BUTTON_ID_SELECT, mid_click_handler);
+	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+	window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
+}
+
+
+void back_click_handler_menu(ClickRecognizerRef recognizer, void *context) {
+  state = SCREEN_HIGHLIGHT;
+  hideMenu();
+}
+
+void click_config_provider_menu(void *context) {
+  window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler_menu);
+}
+
 void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   switch (state) {
     case SCREEN_NAV:
