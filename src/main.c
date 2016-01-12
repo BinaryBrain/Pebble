@@ -116,20 +116,20 @@ void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
 
 /* SCREEN NAV */
 void initScreen() {
-  ScreenPart top0 = { .text = "Hello 0", .type = 0 };
-  ScreenPart bot0 = { .text = "World 0", .type = 0 };
+  ScreenPart top0 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
+  ScreenPart bot0 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
   screens[0].topPart = top0;
   screens[0].botPart = bot0;
-  ScreenPart top1 = { .text = "Hello 1", .type = 0 };
-  ScreenPart bot1 = { .text = "World 1", .type = 0 };
+  ScreenPart top1 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
+  ScreenPart bot1 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
   screens[1].topPart = top1;
   screens[1].botPart = bot1;
-  ScreenPart top2 = { .text = "Hello 2", .type = 0 };
-  ScreenPart bot2 = { .text = "World 2", .type = 0 };
+  ScreenPart top2 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
+  ScreenPart bot2 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
   screens[2].topPart = top2;
   screens[2].botPart = bot2;
-  ScreenPart top3 = { .text = "Hello 3", .type = 0 };
-  ScreenPart bot3 = { .text = "World 3", .type = 0 };
+  ScreenPart top3 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
+  ScreenPart bot3 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
   screens[3].topPart = top3;
   screens[3].botPart = bot3;
 }
@@ -219,6 +219,8 @@ void menu_select_callback(int index, void *ctx) {
   topHighlighted = true;
   
   send(index, "");
+  int isBot = (topHighlighted) ? 0 : 1;
+  persist_write_int(currentScreen * 2 + isBot, index);
 }
 
 SimpleMenuSection menuSections[NUMBER_OF_SECTIONS];
@@ -606,6 +608,37 @@ static void init(void) {
 
   app_message_register_inbox_received(received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+  
+  for (unsigned int i = 0; i < NUMBER_OF_SCREENS * 2; i += 2) {
+    int index = 0;
+    if (persist_exists(i)) {
+      index = persist_read_int(i);
+          
+      char text[200] = "";
+      getSelectionText(index, text);
+      
+      strcpy(screens[i/2].topPart.text, text);
+      screens[i/2].topPart.type = index;
+      layer_mark_dirty(text_layer_get_layer(top_layer));
+      
+      refreshScreen();
+      send(index, "");
+    }
+    
+    if (persist_exists(i+1)) {
+      index = persist_read_int(i+1);
+          
+      char text[200] = "";
+      getSelectionText(index, text);
+      
+      strcpy(screens[(i-1)/2].botPart.text, text);
+      screens[(i-1)/2].botPart.type = index;
+      layer_mark_dirty(text_layer_get_layer(bot_layer));
+      
+      refreshScreen();
+      send(index, "");
+    }
+  }
 }
 
 static void deinit(void) {
