@@ -9,9 +9,10 @@
     "resources": {
         "media": []
     },
-    "sdkVersion": "3",
+    "sdkVersion": "2",
     "shortName": "IHM",
     "uuid": "12448017-142a-422d-82f7-c91c0d865b1a",
+    "versionCode": 1,
     "versionLabel": "1.0",
     "watchapp": {
         "watchface": false

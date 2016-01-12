@@ -107,13 +107,6 @@ void getSelectionText(int index, char* text);
 void send(int key, char *value);
 void updateScreen(const char* string, int index);
 
-/*
-void setScreenParts(Screen* screen, ScreenPart* top, ScreenPart* bot) {
-  screen.topPart = top;
-  screen.botPart = bot;
-}
-*/
-
 /* SCREEN NAV */
 void initScreen() {
   ScreenPart top0 = { .text = "Sélectionnez un type de donnée...", .type = 0 };
@@ -552,8 +545,8 @@ static void screen_window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(top_layer));
   layer_add_child(window_layer, text_layer_get_layer(bot_layer));
   
-  initScreen();
-  refreshScreen();
+  // initScreen();
+  // refreshScreen();
 }
 
 static void screen_window_unload(Window *window) {
@@ -586,6 +579,7 @@ static void init(void) {
     .load = screen_window_load,
     .unload = screen_window_unload,
   });
+  
   window_stack_push(screen_window, true);
   
   // Menu Window
